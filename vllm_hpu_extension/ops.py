@@ -31,10 +31,14 @@ except ImportError:
                    "vLLM will use native implementation.")
 
 
+MAGIC_NUMBER = float(os.environ.get("VLLM_PA_SOFTMAX_MAGIC_NUMBER", "10"))
+
 class SoftmaxNormalization:
 
     def __init__(self, selected_impl):
         implementations = {
+            'no': self.no,
+            'magic': self.magic,
             'wsum': self.wsum,
             'amax': self.amax,
             'head_amax': self.head_amax,
@@ -51,6 +55,14 @@ class SoftmaxNormalization:
         for impl in self.selected_impl:
             attn = impl(attn, **kwargs)
         return attn
+
+    @staticmethod
+    def no(attn, **rest):
+        return attn
+
+    @staticmethod
+    def magic(attn, **rest):
+        return attn - MAGIC_NUMBER
 
     @staticmethod
     def amax(attn, **rest):
@@ -109,7 +121,7 @@ class SoftmaxNormalization:
         return attn.sub_(grouped_max.unsqueeze(-1).unsqueeze(-1))
 
 
-normalize = SoftmaxNormalization(os.environ.get('VLLM_PA_SOFTMAX_IMPL', 'wsum_head_amax').split(','))
+normalize = SoftmaxNormalization(os.environ.get('VLLM_PA_SOFTMAX_IMPL', 'magic').split(','))
 
 
 def batch2block(tensor, block_mapping):
